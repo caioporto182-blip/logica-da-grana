@@ -657,6 +657,11 @@ function App() {
     setMensagemNuvem('Dados carregados da nuvem.')
     setCarregandoNuvem(false)
   }
+  // Carregar automaticamente da nuvem sempre que o usuário logar
+  useEffect(() => {
+    if (!user) return
+    carregarDaNuvem()
+  }, [user])
 
   // ---------------------------------------------------------
   // ESTATÍSTICAS
