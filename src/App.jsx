@@ -72,6 +72,8 @@ function App() {
   const [modalUploadLote, setModalUploadLote] = useState(false)
   const [modalExclusaoMassa, setModalExclusaoMassa] = useState(false)
   const [modalUploadTimeline, setModalUploadTimeline] = useState(false)
+  const [modoSelecaoMultipla, setModoSelecaoMultipla] = useState(false)
+  const [videosSelecionados, setVideosSelecionados] = useState([])
   const [novaIdeia, setNovaIdeia] = useState({
     titulo: '',
     pilar: 'Investimentos',
@@ -215,20 +217,28 @@ function App() {
     const videoIndex = timelineAtiva.findIndex(v => v.id === videoId)
     if (videoIndex === -1) return
 
-    const novaDataObj = new Date(novaData)
+    // Corrigir o cálculo do dia da semana
+    const [ano, mes, dia] = novaData.split('-').map(Number)
+    const novaDataObj = new Date(ano, mes - 1, dia) // mes - 1 porque Date usa 0-11 para meses
     const diaSemana = novaDataObj.toLocaleDateString('pt-BR', { weekday: 'long' })
     
-    // Atualizar o vídeo atual
-    const timelineAtualizada = [...timelineAtiva]
-    timelineAtualizada[videoIndex] = {
-      ...timelineAtualizada[videoIndex],
-      data: novaData,
-      diaSemana: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
-    }
+    console.log('Data:', novaData, 'Dia da semana:', diaSemana) // Debug
+    
+    // Criar nova timeline completamente nova para forçar re-render
+    const timelineAtualizada = timelineAtiva.map((video, index) => {
+      if (index === videoIndex) {
+        return {
+          ...video,
+          data: novaData,
+          diaSemana: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
+        }
+      }
+      return { ...video }
+    })
 
     // Recalcular datas dos vídeos seguintes (3x por semana: segunda, quarta, sexta)
     const diasPostagem = [1, 3, 5] // Segunda=1, Quarta=3, Sexta=5
-    let dataReferencia = new Date(novaData)
+    let dataReferencia = new Date(ano, mes - 1, dia)
     
     for (let i = videoIndex + 1; i < timelineAtualizada.length; i++) {
       // Encontrar próximo dia de postagem
@@ -251,8 +261,8 @@ function App() {
       dataReferencia = proximaData
     }
 
-    setTimelineAtiva(timelineAtualizada)
-    localStorage.setItem('logica-da-grana-v4-timeline', JSON.stringify(timelineAtualizada))
+    // Forçar atualização completa do estado
+    setTimelineAtiva([...timelineAtualizada])
   }
 
   // Funções V4 - Criação de conteúdo
@@ -362,6 +372,46 @@ function App() {
       setTimelineAtiva([])
       setModalExclusaoMassa(false)
       alert('Timeline Ativa foi limpa com sucesso!')
+    }
+  }
+
+  // Funções V4 - Seleção múltipla
+  const toggleSelecaoMultipla = () => {
+    setModoSelecaoMultipla(!modoSelecaoMultipla)
+    setVideosSelecionados([])
+  }
+
+  const toggleVideoSelecionado = (videoId) => {
+    setVideosSelecionados(prev => {
+      if (prev.includes(videoId)) {
+        return prev.filter(id => id !== videoId)
+      } else {
+        return [...prev, videoId]
+      }
+    })
+  }
+
+  const selecionarTodos = () => {
+    const todosIds = videosFiltrados.map(v => v.id)
+    setVideosSelecionados(todosIds)
+  }
+
+  const deselecionarTodos = () => {
+    setVideosSelecionados([])
+  }
+
+  const excluirVideosSelecionados = () => {
+    if (videosSelecionados.length === 0) {
+      alert('Nenhum vídeo selecionado!')
+      return
+    }
+
+    if (confirm(`Tem certeza que deseja excluir ${videosSelecionados.length} vídeo(s) selecionado(s)? Esta ação não pode ser desfeita.`)) {
+      setTimelineAtiva(prev => prev.filter(v => !videosSelecionados.includes(v.id)))
+      setVideosSelecionados([])
+      setModoSelecaoMultipla(false)
+      setModalExclusaoMassa(false)
+      alert(`${videosSelecionados.length} vídeo(s) excluído(s) com sucesso!`)
     }
   }
 
@@ -668,23 +718,35 @@ function App() {
             {/* Grid de vídeos da Timeline */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
               {videosExibidos.map((video) => (
-                <Card key={video.id} className="hover:shadow-lg transition-shadow">
+                <Card key={video.id} className={`hover:shadow-lg transition-shadow ${videosSelecionados.includes(video.id) ? 'ring-2 ring-blue-500' : ''}`}>
                   <CardHeader className="pb-3">
                     <div className="flex justify-between items-start mb-2">
-                      <Badge className={getCorPilar(video.pilar)}>
-                        {video.pilar}
-                      </Badge>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => {
-                          setVideoParaTrocar(video)
-                          setModalTroca(true)
-                        }}
-                        className="h-8 w-8 p-0"
-                      >
-                        <ArrowUpDown className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center space-x-2">
+                        {modoSelecaoMultipla && (
+                          <input
+                            type="checkbox"
+                            checked={videosSelecionados.includes(video.id)}
+                            onChange={() => toggleVideoSelecionado(video.id)}
+                            className="w-4 h-4 text-blue-600 rounded"
+                          />
+                        )}
+                        <Badge className={getCorPilar(video.pilar)}>
+                          {video.pilar}
+                        </Badge>
+                      </div>
+                      {!modoSelecaoMultipla && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setVideoParaTrocar(video)
+                            setModalTroca(true)
+                          }}
+                          className="h-8 w-8 p-0"
+                        >
+                          <ArrowUpDown className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                     <CardTitle className="text-base leading-tight">
                       {video.titulo}
@@ -1290,34 +1352,116 @@ function App() {
           </DialogHeader>
           
           <div className="space-y-4">
-            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
-              <p className="text-red-800 font-medium mb-2">⚠️ Atenção: Ação Irreversível</p>
-              <p className="text-sm text-red-700">
-                Esta ação irá excluir TODOS os {timelineAtiva.length} vídeos da Timeline Ativa permanentemente. 
-                Esta operação não pode ser desfeita.
-              </p>
-            </div>
+            {!modoSelecaoMultipla ? (
+              <>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-blue-800 font-medium mb-2">🎯 Escolha o Tipo de Exclusão</p>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Você pode excluir todos os vídeos ou selecionar específicos para exclusão.
+                  </p>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={toggleSelecaoMultipla}
+                      className="text-blue-600 border-blue-300"
+                    >
+                      <CheckCircle className="h-4 w-4 mr-2" />
+                      Selecionar Específicos
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
-              <p className="text-yellow-800 font-medium mb-2">💡 Alternativa Recomendada</p>
-              <p className="text-sm text-yellow-700">
-                Considere usar o "Upload Timeline" para substituir o conteúdo atual em vez de excluir tudo.
-              </p>
-            </div>
+                <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+                  <p className="text-red-800 font-medium mb-2">⚠️ Exclusão Total</p>
+                  <p className="text-sm text-red-700">
+                    Esta ação irá excluir TODOS os {timelineAtiva.length} vídeos da Timeline Ativa permanentemente. 
+                    Esta operação não pode ser desfeita.
+                  </p>
+                </div>
 
-            <div className="flex justify-end space-x-2 pt-4">
-              <Button variant="outline" onClick={() => setModalExclusaoMassa(false)}>
-                Cancelar
-              </Button>
-              <Button 
-                variant="destructive" 
-                onClick={excluirTimelineCompleta}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Confirmar Exclusão
-              </Button>
-            </div>
+                <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+                  <p className="text-yellow-800 font-medium mb-2">💡 Alternativa Recomendada</p>
+                  <p className="text-sm text-yellow-700">
+                    Considere usar o "Upload Timeline" para substituir o conteúdo atual em vez de excluir tudo.
+                  </p>
+                </div>
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button variant="outline" onClick={() => setModalExclusaoMassa(false)}>
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={excluirTimelineCompleta}
+                    className="bg-red-600 hover:bg-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir Todos
+                  </Button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="bg-blue-50 p-4 rounded-lg border border-blue-200">
+                  <p className="text-blue-800 font-medium mb-2">✅ Modo Seleção Ativa</p>
+                  <p className="text-sm text-blue-700 mb-3">
+                    Selecione os vídeos que deseja excluir marcando os checkboxes nos cards.
+                  </p>
+                  <div className="flex space-x-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={selecionarTodos}
+                      className="text-blue-600"
+                    >
+                      Selecionar Todos
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={deselecionarTodos}
+                      className="text-gray-600"
+                    >
+                      Desmarcar Todos
+                    </Button>
+                  </div>
+                </div>
+
+                {videosSelecionados.length > 0 && (
+                  <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                    <p className="text-orange-800 font-medium mb-2">
+                      📋 {videosSelecionados.length} vídeo(s) selecionado(s)
+                    </p>
+                    <p className="text-sm text-orange-700">
+                      Clique em "Excluir Selecionados" para remover apenas os vídeos marcados.
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex justify-end space-x-2 pt-4">
+                  <Button 
+                    variant="outline" 
+                    onClick={() => {
+                      setModoSelecaoMultipla(false)
+                      setVideosSelecionados([])
+                      setModalExclusaoMassa(false)
+                    }}
+                  >
+                    Cancelar
+                  </Button>
+                  <Button 
+                    variant="destructive" 
+                    onClick={excluirVideosSelecionados}
+                    disabled={videosSelecionados.length === 0}
+                    className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir Selecionados ({videosSelecionados.length})
+                  </Button>
+                </div>
+              </>
+            )}
           </div>
         </DialogContent>
       </Dialog>
