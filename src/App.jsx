@@ -415,6 +415,16 @@ function App() {
     }
   }
 
+  const excluirVideoIndividual = (videoId) => {
+    const video = timelineAtiva.find(v => v.id === videoId)
+    if (!video) return
+
+    if (confirm(`Tem certeza que deseja excluir o vídeo "${video.titulo}"? Esta ação não pode ser desfeita.`)) {
+      setTimelineAtiva(prev => prev.filter(v => v.id !== videoId))
+      alert('Vídeo excluído com sucesso!')
+    }
+  }
+
   const processarUploadTimeline = (texto) => {
     try {
       const linhas = texto.split('\n').filter(linha => linha.trim())
@@ -735,17 +745,29 @@ function App() {
                         </Badge>
                       </div>
                       {!modoSelecaoMultipla && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => {
-                            setVideoParaTrocar(video)
-                            setModalTroca(true)
-                          }}
-                          className="h-8 w-8 p-0"
-                        >
-                          <ArrowUpDown className="h-4 w-4" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setVideoParaTrocar(video)
+                              setModalTroca(true)
+                            }}
+                            className="h-8 w-8 p-0"
+                            title="Trocar vídeo"
+                          >
+                            <ArrowUpDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => excluirVideoIndividual(video.id)}
+                            className="h-8 w-8 p-0 text-red-500 hover:text-red-700 hover:bg-red-50"
+                            title="Excluir vídeo"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       )}
                     </div>
                     <CardTitle className="text-base leading-tight">
