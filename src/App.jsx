@@ -31,22 +31,22 @@ import './App.css'
 function App() {
   // Estados principais
   const [timelineAtiva, setTimelineAtiva] = useState(() => {
-    const saved = localStorage.getItem('logica-da-grana-v3-timeline')
+    const saved = localStorage.getItem('logica-da-grana-v4-timeline')
     return saved ? JSON.parse(saved) : timelineInicial
   })
   
   const [bancoIdeias, setBancoIdeias] = useState(() => {
-    const saved = localStorage.getItem('logica-da-grana-v3-banco')
+    const saved = localStorage.getItem('logica-da-grana-v4-banco')
     return saved ? JSON.parse(saved) : bancoInicial
   })
   
   const [historicoPostagens, setHistoricoPostagens] = useState(() => {
-    const saved = localStorage.getItem('logica-da-grana-v3-historico')
+    const saved = localStorage.getItem('logica-da-grana-v4-historico')
     return saved ? JSON.parse(saved) : []
   })
   
   const [historicoTrocas, setHistoricoTrocas] = useState(() => {
-    const saved = localStorage.getItem('logica-da-grana-v3-trocas')
+    const saved = localStorage.getItem('logica-da-grana-v4-trocas')
     return saved ? JSON.parse(saved) : []
   })
 
@@ -83,19 +83,19 @@ function App() {
 
   // Salvar no localStorage sempre que houver mudanças
   useEffect(() => {
-    localStorage.setItem('logica-da-grana-v3-timeline', JSON.stringify(timelineAtiva))
+    localStorage.setItem('logica-da-grana-v4-timeline', JSON.stringify(timelineAtiva))
   }, [timelineAtiva])
 
   useEffect(() => {
-    localStorage.setItem('logica-da-grana-v3-banco', JSON.stringify(bancoIdeias))
+    localStorage.setItem('logica-da-grana-v4-banco', JSON.stringify(bancoIdeias))
   }, [bancoIdeias])
 
   useEffect(() => {
-    localStorage.setItem('logica-da-grana-v3-historico', JSON.stringify(historicoPostagens))
+    localStorage.setItem('logica-da-grana-v4-historico', JSON.stringify(historicoPostagens))
   }, [historicoPostagens])
 
   useEffect(() => {
-    localStorage.setItem('logica-da-grana-v3-trocas', JSON.stringify(historicoTrocas))
+    localStorage.setItem('logica-da-grana-v4-trocas', JSON.stringify(historicoTrocas))
   }, [historicoTrocas])
 
   // Resetar paginação quando mudar de página
@@ -381,10 +381,10 @@ function App() {
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="h-8 w-8 text-blue-600" />
-                <h1 className="text-2xl font-bold text-gray-900">A Lógica da Grana V3</h1>
+                <h1 className="text-2xl font-bold text-gray-900">A Lógica da Grana V4</h1>
               </div>
               <Badge variant="outline" className="text-xs">
-                Cronograma Dinâmico
+                Cronograma Dinâmico + Criação
               </Badge>
             </div>
             
