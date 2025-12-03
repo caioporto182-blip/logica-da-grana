@@ -4,7 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from './components/ui/card'
 import { Badge } from './components/ui/badge'
 import { Input } from './components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from './components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from './components/ui/dialog'
 import { 
   Calendar, 
   Clock, 
@@ -23,14 +23,67 @@ import {
   Plus,
   FileText,
   Save,
-  X,
   Trash2
 } from 'lucide-react'
-import { timelineAtiva as timelineInicial, bancoIdeias as bancoInicial, getEstatisticas } from './data/cronograma-completo-v3-corrigido'
+import { timelineAtiva as timelineInicial, bancoIdeias as bancoInicial } from './data/cronograma-completo-v3-corrigido'
 import './App.css'
+import { supabase } from './lib/supabase'
 
 function App() {
-  // Estados principais
+  // ---------------------------------------------------------
+  // AUTENTICAÇÃO (LOGIN)
+  // ---------------------------------------------------------
+  const [user, setUser] = useState(null)
+  const [authLoading, setAuthLoading] = useState(true)
+  const [authError, setAuthError] = useState('')
+  const [email, setEmail] = useState('')
+  const [password, setPassword] = useState('')
+
+  // Recuperar usuário salvo no navegador
+  useEffect(() => {
+    const saved = localStorage.getItem('logica-da-grana-v4-user')
+    if (saved) {
+      try {
+        setUser(JSON.parse(saved))
+      } catch (err) {
+        console.error('Erro ao ler usuário salvo', err)
+      }
+    }
+    setAuthLoading(false)
+  }, [])
+
+  const handleLogin = async (e) => {
+    e.preventDefault()
+    setAuthError('')
+    setAuthLoading(true)
+
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single()
+
+    if (error || !data) {
+      console.error(error)
+      setAuthError('Login inválido. Verifique email e senha.')
+      setAuthLoading(false)
+      return
+    }
+
+    setUser(data)
+    localStorage.setItem('logica-da-grana-v4-user', JSON.stringify(data))
+    setAuthLoading(false)
+  }
+
+  const handleLogout = () => {
+    setUser(null)
+    localStorage.removeItem('logica-da-grana-v4-user')
+  }
+
+  // ---------------------------------------------------------
+  // ESTADOS PRINCIPAIS DO APP
+  // ---------------------------------------------------------
   const [timelineAtiva, setTimelineAtiva] = useState(() => {
     const saved = localStorage.getItem('logica-da-grana-v4-timeline')
     return saved ? JSON.parse(saved) : timelineInicial
@@ -110,7 +163,9 @@ function App() {
     setPaginaBanco(1)
   }, [paginaAtual])
 
-  // Função para atualizar status do vídeo
+  // ---------------------------------------------------------
+  // FUNÇÕES ORIGINAIS (status, roteiro, trocas, etc.)
+  // ---------------------------------------------------------
   const atualizarStatus = (id, novoStatus) => {
     if (novoStatus === 'postado') {
       const linkYoutube = prompt('Cole o link do vídeo no YouTube:')
@@ -149,26 +204,22 @@ function App() {
     }
   }
 
-  // Função para atualizar roteiro
   const atualizarRoteiro = (id, roteiro) => {
     setTimelineAtiva(prev => prev.map(video => 
       video.id === id ? { ...video, roteiro } : video
     ))
   }
 
-  // Função para trocar vídeo
   const trocarVideo = () => {
     if (!videoParaTrocar || !videoSelecionado) return
 
-    // Remover vídeo da timeline e adicionar ao banco
     const videoRemovido = { ...videoParaTrocar }
     delete videoRemovido.status
     delete videoRemovido.roteiro
 
-    // Adicionar vídeo selecionado à timeline
     const novoVideo = {
       ...videoSelecionado,
-      id: videoParaTrocar.id, // Manter o ID original para preservar posição
+      id: videoParaTrocar.id,
       status: 'pendente',
       roteiro: ''
     }
@@ -182,7 +233,6 @@ function App() {
       videoRemovido
     ])
 
-    // Registrar troca no histórico
     setHistoricoTrocas(prev => [...prev, {
       id: Date.now(),
       data: new Date().toISOString(),
@@ -196,7 +246,6 @@ function App() {
     setVideoSelecionado(null)
   }
 
-  // Função para promover vídeo do banco para timeline
   const promoverParaTimeline = (id) => {
     const video = bancoIdeias.find(v => v.id === id)
     if (!video) return
@@ -212,19 +261,14 @@ function App() {
     setBancoIdeias(prev => prev.filter(v => v.id !== id))
   }
 
-  // Função para atualizar data de vídeo com recálculo automático
   const atualizarDataVideo = (videoId, novaData) => {
     const videoIndex = timelineAtiva.findIndex(v => v.id === videoId)
     if (videoIndex === -1) return
 
-    // Corrigir o cálculo do dia da semana
     const [ano, mes, dia] = novaData.split('-').map(Number)
-    const novaDataObj = new Date(ano, mes - 1, dia) // mes - 1 porque Date usa 0-11 para meses
+    const novaDataObj = new Date(ano, mes - 1, dia)
     const diaSemana = novaDataObj.toLocaleDateString('pt-BR', { weekday: 'long' })
     
-    console.log('Data:', novaData, 'Dia da semana:', diaSemana) // Debug
-    
-    // Criar nova timeline completamente nova para forçar re-render
     const timelineAtualizada = timelineAtiva.map((video, index) => {
       if (index === videoIndex) {
         return {
@@ -236,12 +280,10 @@ function App() {
       return { ...video }
     })
 
-    // Recalcular datas dos vídeos seguintes (3x por semana: segunda, quarta, sexta)
-    const diasPostagem = [1, 3, 5] // Segunda=1, Quarta=3, Sexta=5
+    const diasPostagem = [1, 3, 5]
     let dataReferencia = new Date(ano, mes - 1, dia)
     
     for (let i = videoIndex + 1; i < timelineAtualizada.length; i++) {
-      // Encontrar próximo dia de postagem
       let proximaData = new Date(dataReferencia)
       proximaData.setDate(proximaData.getDate() + 1)
       
@@ -261,7 +303,6 @@ function App() {
       dataReferencia = proximaData
     }
 
-    // Forçar atualização completa do estado
     setTimelineAtiva([...timelineAtualizada])
   }
 
@@ -291,7 +332,6 @@ function App() {
 
     setBancoIdeias(prev => [...prev, ideiaCompleta])
     
-    // Resetar formulário
     setNovaIdeia({
       titulo: '',
       pilar: 'Investimentos',
@@ -316,11 +356,15 @@ function App() {
         const linha = linhas[i].trim()
         if (!linha) continue
         
-        // Formato esperado: Título | Pilar | Tema | Formato | Duração | Palavras-chave | CTA
         const partes = linha.split('|').map(p => p.trim())
         
         if (partes.length >= 3) {
-          const novoId = Math.max(...bancoIdeias.map(v => v.id), ...timelineAtiva.map(v => v.id), ...novasIdeias.map(v => v.id)) + 1
+          const novoId = Math.max(
+            ...bancoIdeias.map(v => v.id),
+            ...timelineAtiva.map(v => v.id),
+            ...novasIdeias.map(v => v.id),
+            0
+          ) + 1
           const dataAtual = new Date().toISOString().split('T')[0]
           
           const novaIdeia = {
@@ -434,11 +478,14 @@ function App() {
         const linha = linhas[i].trim()
         if (!linha) continue
         
-        // Formato esperado: Título | Pilar | Data | Tema | Formato | Duração | Palavras-chave | CTA
         const partes = linha.split('|').map(p => p.trim())
         
         if (partes.length >= 4) {
-          const novoId = Math.max(...timelineAtiva.map(v => v.id), ...bancoIdeias.map(v => v.id), 0) + i + 1
+          const novoId = Math.max(
+            ...timelineAtiva.map(v => v.id),
+            ...bancoIdeias.map(v => v.id),
+            0
+          ) + i + 1
           const data = partes[2] || new Date().toISOString().split('T')[0]
           const dataObj = new Date(data)
           const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' })
@@ -447,7 +494,7 @@ function App() {
             id: novoId,
             titulo: partes[0],
             pilar: partes[1] || 'Investimentos',
-            data: data,
+            data,
             diaSemana: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1),
             tema: partes[3] || 'Educação Financeira',
             formato: partes[4] || 'Educacional',
@@ -484,7 +531,9 @@ function App() {
     reader.readAsText(file)
   }
 
-  // Aplicar filtros baseado na página atual
+  // ---------------------------------------------------------
+  // FILTROS / PAGINAÇÃO
+  // ---------------------------------------------------------
   const aplicarFiltros = (videos) => {
     return videos.filter(video => {
       const matchMes = filtroMes === 'todos' || 
@@ -499,7 +548,6 @@ function App() {
     })
   }
 
-  // Obter vídeos filtrados para a página atual
   const getVideosFiltrados = () => {
     switch (paginaAtual) {
       case 'timeline':
@@ -523,7 +571,6 @@ function App() {
     paginaAtualNum * videosPerPage
   )
 
-  // Função para mudar página
   const mudarPagina = (novaPagina) => {
     if (paginaAtual === 'timeline') {
       setPaginaTimeline(novaPagina)
@@ -532,7 +579,7 @@ function App() {
     }
   }
 
-  // Obter cor do pilar
+  // Cor do pilar
   const getCorPilar = (pilar) => {
     switch (pilar) {
       case 'Investimentos': return 'bg-blue-100 text-blue-800 border-blue-200'
@@ -542,19 +589,151 @@ function App() {
     }
   }
 
-  // Obter estatísticas
+  // ---------------------------------------------------------
+  // SINCRONIZAÇÃO COM NUVEM (SUPABASE)
+  // ---------------------------------------------------------
+  const [salvandoNuvem, setSalvandoNuvem] = useState(false)
+  const [carregandoNuvem, setCarregandoNuvem] = useState(false)
+  const [mensagemNuvem, setMensagemNuvem] = useState('')
+
+  const salvarNaNuvem = async () => {
+    if (!user) return
+    setSalvandoNuvem(true)
+    setMensagemNuvem('')
+
+    const payload = {
+      timelineAtiva,
+      bancoIdeias,
+      historicoPostagens,
+      historicoTrocas,
+    }
+
+    const { error } = await supabase
+      .from('app_state')
+      .upsert(
+        {
+          email: user.email,
+          data: payload,
+          updated_at: new Date().toISOString(),
+        },
+        { onConflict: 'email' }
+      )
+
+    if (error) {
+      console.error(error)
+      setMensagemNuvem('Erro ao salvar na nuvem.')
+    } else {
+      setMensagemNuvem('Salvo na nuvem com sucesso.')
+    }
+
+    setSalvandoNuvem(false)
+  }
+
+  const carregarDaNuvem = async () => {
+    if (!user) return
+    setCarregandoNuvem(true)
+    setMensagemNuvem('')
+
+    const { data, error } = await supabase
+      .from('app_state')
+      .select('data')
+      .eq('email', user.email)
+      .single()
+
+    if (error || !data) {
+      console.error(error)
+      setMensagemNuvem('Nenhum dado encontrado na nuvem.')
+      setCarregandoNuvem(false)
+      return
+    }
+
+    const estado = data.data || {}
+
+    if (estado.timelineAtiva) setTimelineAtiva(estado.timelineAtiva)
+    if (estado.bancoIdeias) setBancoIdeias(estado.bancoIdeias)
+    if (estado.historicoPostagens) setHistoricoPostagens(estado.historicoPostagens)
+    if (estado.historicoTrocas) setHistoricoTrocas(estado.historicoTrocas)
+
+    setMensagemNuvem('Dados carregados da nuvem.')
+    setCarregandoNuvem(false)
+  }
+
+  // ---------------------------------------------------------
+  // ESTATÍSTICAS
+  // ---------------------------------------------------------
   const stats = {
     totalTimeline: timelineAtiva.length,
     totalBanco: bancoIdeias.length,
     totalHistorico: historicoPostagens.length
   }
 
+  // ---------------------------------------------------------
+  // TELAS DE CARREGANDO / LOGIN
+  // ---------------------------------------------------------
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950 text-slate-50">
+        Carregando...
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-950">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-xl">A Lógica da Grana – Login</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleLogin} className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email</label>
+                <Input
+                  type="email"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  placeholder="seu@email.com"
+                  required
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Senha</label>
+                <Input
+                  type="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  required
+                />
+              </div>
+
+              {authError && (
+                <p className="text-sm text-red-500">
+                  {authError}
+                </p>
+              )}
+
+              <Button type="submit" className="w-full" disabled={authLoading}>
+                {authLoading ? 'Entrando...' : 'Entrar'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // ---------------------------------------------------------
+  // APP NORMAL (SÓ APARECE SE ESTIVER LOGADO)
+  // ---------------------------------------------------------
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex justify-between items-center py-4">
+          <div className="flex justify-between items-start py-4 gap-4">
             <div className="flex items-center space-x-4">
               <div className="flex items-center space-x-2">
                 <BarChart3 className="h-8 w-8 text-blue-600" />
@@ -565,32 +744,74 @@ function App() {
               </Badge>
             </div>
             
-            {/* Navegação entre páginas */}
-            <div className="flex space-x-2">
-              <Button
-                variant={paginaAtual === 'timeline' ? 'default' : 'outline'}
-                onClick={() => setPaginaAtual('timeline')}
-                className="flex items-center gap-2"
-              >
-                <Calendar className="h-4 w-4" />
-                Timeline Ativa ({stats.totalTimeline})
-              </Button>
-              <Button
-                variant={paginaAtual === 'historico' ? 'default' : 'outline'}
-                onClick={() => setPaginaAtual('historico')}
-                className="flex items-center gap-2"
-              >
-                <CheckCircle className="h-4 w-4" />
-                Histórico de Postagens ({stats.totalHistorico})
-              </Button>
-              <Button
-                variant={paginaAtual === 'banco' ? 'default' : 'outline'}
-                onClick={() => setPaginaAtual('banco')}
-                className="flex items-center gap-2"
-              >
-                <Lightbulb className="h-4 w-4" />
-                Banco de Ideias ({stats.totalBanco})
-              </Button>
+            {/* Navegação + conta + nuvem */}
+            <div className="flex flex-col items-end gap-2">
+              {/* Navegação entre páginas */}
+              <div className="flex flex-wrap justify-end gap-2">
+                <Button
+                  variant={paginaAtual === 'timeline' ? 'default' : 'outline'}
+                  onClick={() => setPaginaAtual('timeline')}
+                  className="flex items-center gap-2"
+                >
+                  <Calendar className="h-4 w-4" />
+                  Timeline Ativa ({stats.totalTimeline})
+                </Button>
+                <Button
+                  variant={paginaAtual === 'historico' ? 'default' : 'outline'}
+                  onClick={() => setPaginaAtual('historico')}
+                  className="flex items-center gap-2"
+                >
+                  <CheckCircle className="h-4 w-4" />
+                  Histórico de Postagens ({stats.totalHistorico})
+                </Button>
+                <Button
+                  variant={paginaAtual === 'banco' ? 'default' : 'outline'}
+                  onClick={() => setPaginaAtual('banco')}
+                  className="flex items-center gap-2"
+                >
+                  <Lightbulb className="h-4 w-4" />
+                  Banco de Ideias ({stats.totalBanco})
+                </Button>
+              </div>
+
+              {/* Info de usuário + botões de nuvem */}
+              <div className="flex flex-wrap gap-2 items-center justify-end text-xs text-gray-600">
+                <span>
+                  Logado como <strong>{user?.email}</strong>
+                </span>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={carregarDaNuvem}
+                  disabled={carregandoNuvem}
+                >
+                  {carregandoNuvem ? 'Carregando...' : 'Carregar da nuvem'}
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={salvarNaNuvem}
+                  disabled={salvandoNuvem}
+                >
+                  {salvandoNuvem ? 'Salvando...' : 'Salvar na nuvem'}
+                </Button>
+
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleLogout}
+                >
+                  Sair
+                </Button>
+              </div>
+
+              {mensagemNuvem && (
+                <p className="text-[11px] text-gray-500">
+                  {mensagemNuvem}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -1552,4 +1773,3 @@ function App() {
 }
 
 export default App
-
