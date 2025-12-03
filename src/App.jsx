@@ -23,7 +23,8 @@ import {
   Plus,
   FileText,
   Save,
-  X
+  X,
+  Trash2
 } from 'lucide-react'
 import { timelineAtiva as timelineInicial, bancoIdeias as bancoInicial, getEstatisticas } from './data/cronograma-completo-v3-corrigido'
 import './App.css'
@@ -69,6 +70,8 @@ function App() {
   // Estados V4 - Criação de conteúdo
   const [modalNovaIdeia, setModalNovaIdeia] = useState(false)
   const [modalUploadLote, setModalUploadLote] = useState(false)
+  const [modalExclusaoMassa, setModalExclusaoMassa] = useState(false)
+  const [modalUploadTimeline, setModalUploadTimeline] = useState(false)
   const [novaIdeia, setNovaIdeia] = useState({
     titulo: '',
     pilar: 'Investimentos',
@@ -80,6 +83,7 @@ function App() {
     cta: ''
   })
   const [arquivoUpload, setArquivoUpload] = useState(null)
+  const [arquivoUploadTimeline, setArquivoUploadTimeline] = useState(null)
 
   // Salvar no localStorage sempre que houver mudanças
   useEffect(() => {
@@ -248,6 +252,7 @@ function App() {
     }
 
     setTimelineAtiva(timelineAtualizada)
+    localStorage.setItem('logica-da-grana-v4-timeline', JSON.stringify(timelineAtualizada))
   }
 
   // Funções V4 - Criação de conteúdo
@@ -347,6 +352,74 @@ function App() {
     reader.onload = (e) => {
       const texto = e.target.result
       processarUploadLote(texto)
+    }
+    reader.readAsText(file)
+  }
+
+  // Funções V4 - Gestão em massa da Timeline
+  const excluirTimelineCompleta = () => {
+    if (confirm('Tem certeza que deseja excluir TODOS os vídeos da Timeline Ativa? Esta ação não pode ser desfeita.')) {
+      setTimelineAtiva([])
+      setModalExclusaoMassa(false)
+      alert('Timeline Ativa foi limpa com sucesso!')
+    }
+  }
+
+  const processarUploadTimeline = (texto) => {
+    try {
+      const linhas = texto.split('\n').filter(linha => linha.trim())
+      const novosVideos = []
+      
+      for (let i = 0; i < linhas.length; i++) {
+        const linha = linhas[i].trim()
+        if (!linha) continue
+        
+        // Formato esperado: Título | Pilar | Data | Tema | Formato | Duração | Palavras-chave | CTA
+        const partes = linha.split('|').map(p => p.trim())
+        
+        if (partes.length >= 4) {
+          const novoId = Math.max(...timelineAtiva.map(v => v.id), ...bancoIdeias.map(v => v.id), 0) + i + 1
+          const data = partes[2] || new Date().toISOString().split('T')[0]
+          const dataObj = new Date(data)
+          const diaSemana = dataObj.toLocaleDateString('pt-BR', { weekday: 'long' })
+          
+          const novoVideo = {
+            id: novoId,
+            titulo: partes[0],
+            pilar: partes[1] || 'Investimentos',
+            data: data,
+            diaSemana: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1),
+            tema: partes[3] || 'Educação Financeira',
+            formato: partes[4] || 'Educacional',
+            duracao: partes[5] || '8-10 min',
+            palavrasChave: partes[6] ? partes[6].split(',').map(p => p.trim()) : [],
+            cta: partes[7] || 'Saiba mais',
+            status: 'pendente',
+            roteiro: ''
+          }
+          
+          novosVideos.push(novoVideo)
+        }
+      }
+      
+      if (novosVideos.length > 0) {
+        setTimelineAtiva(prev => [...prev, ...novosVideos])
+        setModalUploadTimeline(false)
+        setArquivoUploadTimeline(null)
+        alert(`${novosVideos.length} vídeos adicionados à Timeline Ativa com sucesso!`)
+      } else {
+        alert('Nenhum vídeo válido encontrado no arquivo.')
+      }
+    } catch (error) {
+      alert('Erro ao processar arquivo. Verifique o formato.')
+    }
+  }
+
+  const handleUploadTimeline = (file) => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const texto = e.target.result
+      processarUploadTimeline(texto)
     }
     reader.readAsText(file)
   }
@@ -566,8 +639,29 @@ function App() {
           <div>
             <div className="flex justify-between items-center mb-6">
               <h2 className="text-xl font-semibold">Timeline Ativa - Vídeos Planejados</h2>
-              <div className="text-sm text-gray-600">
-                {videosFiltrados.length} vídeos encontrados
+              <div className="flex items-center space-x-4">
+                <div className="flex space-x-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModalExclusaoMassa(true)}
+                    className="text-red-600 hover:text-red-700"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Excluir em Massa
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setModalUploadTimeline(true)}
+                  >
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Timeline
+                  </Button>
+                </div>
+                <div className="text-sm text-gray-600">
+                  {videosFiltrados.length} vídeos encontrados
+                </div>
               </div>
             </div>
 
@@ -1178,6 +1272,109 @@ function App() {
 
             <div className="flex justify-end space-x-2 pt-4">
               <Button variant="outline" onClick={() => setModalUploadLote(false)}>
+                Fechar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal V4 - Exclusão em Massa */}
+      <Dialog open={modalExclusaoMassa} onOpenChange={setModalExclusaoMassa}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-red-600">
+              <Trash2 className="h-5 w-5" />
+              Excluir Timeline Completa
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-red-50 p-4 rounded-lg border border-red-200">
+              <p className="text-red-800 font-medium mb-2">⚠️ Atenção: Ação Irreversível</p>
+              <p className="text-sm text-red-700">
+                Esta ação irá excluir TODOS os {timelineAtiva.length} vídeos da Timeline Ativa permanentemente. 
+                Esta operação não pode ser desfeita.
+              </p>
+            </div>
+
+            <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+              <p className="text-yellow-800 font-medium mb-2">💡 Alternativa Recomendada</p>
+              <p className="text-sm text-yellow-700">
+                Considere usar o "Upload Timeline" para substituir o conteúdo atual em vez de excluir tudo.
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setModalExclusaoMassa(false)}>
+                Cancelar
+              </Button>
+              <Button 
+                variant="destructive" 
+                onClick={excluirTimelineCompleta}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Confirmar Exclusão
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal V4 - Upload Timeline */}
+      <Dialog open={modalUploadTimeline} onOpenChange={setModalUploadTimeline}>
+        <DialogContent className="max-w-3xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Upload className="h-5 w-5" />
+              Upload em Lote - Timeline Ativa
+            </DialogTitle>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h4 className="font-medium text-green-900 mb-2">Formato do Arquivo para Timeline:</h4>
+              <p className="text-sm text-green-800 mb-2">
+                Cada linha deve conter um vídeo no formato:
+              </p>
+              <code className="text-xs bg-green-100 p-2 rounded block">
+                Título | Pilar | Data | Tema | Formato | Duração | Palavras-chave | CTA
+              </code>
+              <p className="text-xs text-green-700 mt-2">
+                Exemplo: "Bem-vindos ao Canal | Investimentos | 2025-10-06 | Apresentação | Educacional | 10-15 min | canal,apresentação | Conheça o canal"
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-2">Selecionar Arquivo (.txt)</label>
+              <input
+                type="file"
+                accept=".txt"
+                onChange={(e) => {
+                  const file = e.target.files[0]
+                  if (file) {
+                    setArquivoUploadTimeline(file)
+                    handleUploadTimeline(file)
+                  }
+                }}
+                className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-green-50 file:text-green-700 hover:file:bg-green-100"
+              />
+            </div>
+
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h4 className="font-medium text-gray-900 mb-2">Dicas para Timeline:</h4>
+              <ul className="text-sm text-gray-700 space-y-1">
+                <li>• <strong>Data:</strong> Use formato YYYY-MM-DD (ex: 2025-10-06)</li>
+                <li>• <strong>Pilar:</strong> Investimentos, Proteção ou Crédito</li>
+                <li>• <strong>Ordem:</strong> Vídeos serão adicionados na ordem do arquivo</li>
+                <li>• <strong>Status:</strong> Todos começam como "Pendente"</li>
+                <li>• <strong>Roteiro:</strong> Campo fica vazio para preenchimento posterior</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end space-x-2 pt-4">
+              <Button variant="outline" onClick={() => setModalUploadTimeline(false)}>
                 Fechar
               </Button>
             </div>
