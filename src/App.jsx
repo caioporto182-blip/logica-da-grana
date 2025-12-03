@@ -206,6 +206,50 @@ function App() {
     setBancoIdeias(prev => prev.filter(v => v.id !== id))
   }
 
+  // Função para atualizar data de vídeo com recálculo automático
+  const atualizarDataVideo = (videoId, novaData) => {
+    const videoIndex = timelineAtiva.findIndex(v => v.id === videoId)
+    if (videoIndex === -1) return
+
+    const novaDataObj = new Date(novaData)
+    const diaSemana = novaDataObj.toLocaleDateString('pt-BR', { weekday: 'long' })
+    
+    // Atualizar o vídeo atual
+    const timelineAtualizada = [...timelineAtiva]
+    timelineAtualizada[videoIndex] = {
+      ...timelineAtualizada[videoIndex],
+      data: novaData,
+      diaSemana: diaSemana.charAt(0).toUpperCase() + diaSemana.slice(1)
+    }
+
+    // Recalcular datas dos vídeos seguintes (3x por semana: segunda, quarta, sexta)
+    const diasPostagem = [1, 3, 5] // Segunda=1, Quarta=3, Sexta=5
+    let dataReferencia = new Date(novaData)
+    
+    for (let i = videoIndex + 1; i < timelineAtualizada.length; i++) {
+      // Encontrar próximo dia de postagem
+      let proximaData = new Date(dataReferencia)
+      proximaData.setDate(proximaData.getDate() + 1)
+      
+      while (!diasPostagem.includes(proximaData.getDay())) {
+        proximaData.setDate(proximaData.getDate() + 1)
+      }
+      
+      const proximaDataStr = proximaData.toISOString().split('T')[0]
+      const proximoDiaSemana = proximaData.toLocaleDateString('pt-BR', { weekday: 'long' })
+      
+      timelineAtualizada[i] = {
+        ...timelineAtualizada[i],
+        data: proximaDataStr,
+        diaSemana: proximoDiaSemana.charAt(0).toUpperCase() + proximoDiaSemana.slice(1)
+      }
+      
+      dataReferencia = proximaData
+    }
+
+    setTimelineAtiva(timelineAtualizada)
+  }
+
   // Funções V4 - Criação de conteúdo
   const adicionarNovaIdeia = () => {
     if (!novaIdeia.titulo.trim()) {
@@ -554,9 +598,17 @@ function App() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {/* Informações do vídeo */}
-                    <div className="flex items-center text-sm text-gray-600">
-                      <Calendar className="h-4 w-4 mr-2" />
-                      {video.data} ({video.diaSemana})
+                    <div className="flex items-center justify-between text-sm text-gray-600">
+                      <div className="flex items-center">
+                        <Calendar className="h-4 w-4 mr-2" />
+                        <input
+                          type="date"
+                          value={video.data}
+                          onChange={(e) => atualizarDataVideo(video.id, e.target.value)}
+                          className="border rounded px-2 py-1 text-sm"
+                        />
+                      </div>
+                      <span className="text-xs">({video.diaSemana})</span>
                     </div>
                     
                     {/* Campo de roteiro */}
