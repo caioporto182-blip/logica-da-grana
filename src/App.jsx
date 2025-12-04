@@ -23,7 +23,9 @@ import {
   Plus,
   FileText,
   Save,
-  Trash2
+  Trash2,
+  Cloud,
+  AlertTriangle
 } from 'lucide-react'
 import { timelineAtiva as timelineInicial, bancoIdeias as bancoInicial } from './data/cronograma-completo-v3-corrigido'
 import './App.css'
@@ -592,71 +594,82 @@ function App() {
   // ---------------------------------------------------------
   // SINCRONIZAÇÃO COM NUVEM (SUPABASE)
   // ---------------------------------------------------------
-  const [salvandoNuvem, setSalvandoNuvem] = useState(false)
-  const [carregandoNuvem, setCarregandoNuvem] = useState(false)
-  const [mensagemNuvem, setMensagemNuvem] = useState('')
+const [salvandoNuvem, setSalvandoNuvem] = useState(false)
+const [carregandoNuvem, setCarregandoNuvem] = useState(false)
+// null ou { tipo: 'sucesso' | 'erro' | 'info', texto: '...' }
+const [nuvemMensagem, setNuvemMensagem] = useState(null)
+  // função helper para exibir mensagem e sumir depois de alguns segundos
+const mostrarMensagemNuvem = (tipo, texto) => {
+  setNuvemMensagem({ tipo, texto })
 
-  const salvarNaNuvem = async () => {
-    if (!user) return
-    setSalvandoNuvem(true)
-    setMensagemNuvem('')
+  // some depois de 4 segundos
+  setTimeout(() => {
+    setNuvemMensagem(null)
+  }, 4000)
+}
+ const salvarNaNuvem = async () => {
+  if (!user) return
+  setSalvandoNuvem(true)
+  setNuvemMensagem(null)
 
-    const payload = {
-      timelineAtiva,
-      bancoIdeias,
-      historicoPostagens,
-      historicoTrocas,
-    }
-
-    const { error } = await supabase
-      .from('app_state')
-      .upsert(
-        {
-          email: user.email,
-          data: payload,
-          updated_at: new Date().toISOString(),
-        },
-        { onConflict: 'email' }
-      )
-
-    if (error) {
-      console.error(error)
-      setMensagemNuvem('Erro ao salvar na nuvem.')
-    } else {
-      setMensagemNuvem('Salvo na nuvem com sucesso.')
-    }
-
-    setSalvandoNuvem(false)
+  const payload = {
+    timelineAtiva,
+    bancoIdeias,
+    historicoPostagens,
+    historicoTrocas,
   }
+
+  const { error } = await supabase
+    .from('app_state')
+    .upsert(
+      {
+        email: user.email,
+        data: payload,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'email' }
+    )
+
+  if (error) {
+    console.error(error)
+    mostrarMensagemNuvem('erro', 'Erro ao salvar na nuvem. Tente novamente.')
+  } else {
+    mostrarMensagemNuvem('sucesso', 'Salvo na nuvem com sucesso!')
+  }
+
+  setSalvandoNuvem(false)
+}
+
 
   const carregarDaNuvem = async () => {
-    if (!user) return
-    setCarregandoNuvem(true)
-    setMensagemNuvem('')
+  if (!user) return
+  setCarregandoNuvem(true)
+  setNuvemMensagem(null)
 
-    const { data, error } = await supabase
-      .from('app_state')
-      .select('data')
-      .eq('email', user.email)
-      .single()
+  const { data, error } = await supabase
+    .from('app_state')
+    .select('data')
+    .eq('email', user.email)
+    .single()
 
-    if (error || !data) {
-      console.error(error)
-      setMensagemNuvem('Nenhum dado encontrado na nuvem.')
-      setCarregandoNuvem(false)
-      return
-    }
-
-    const estado = data.data || {}
-
-    if (estado.timelineAtiva) setTimelineAtiva(estado.timelineAtiva)
-    if (estado.bancoIdeias) setBancoIdeias(estado.bancoIdeias)
-    if (estado.historicoPostagens) setHistoricoPostagens(estado.historicoPostagens)
-    if (estado.historicoTrocas) setHistoricoTrocas(estado.historicoTrocas)
-
-    setMensagemNuvem('Dados carregados da nuvem.')
+  if (error || !data) {
+    console.error(error)
+    mostrarMensagemNuvem('erro', 'Nenhum dado encontrado na nuvem para este usuário.')
     setCarregandoNuvem(false)
+    return
   }
+
+  const estado = data.data || {}
+
+  if (estado.timelineAtiva) setTimelineAtiva(estado.timelineAtiva)
+  if (estado.bancoIdeias) setBancoIdeias(estado.bancoIdeias)
+  if (estado.historicoPostagens) setHistoricoPostagens(estado.historicoPostagens)
+  if (estado.historicoTrocas) setHistoricoTrocas(estado.historicoTrocas)
+
+  mostrarMensagemNuvem('sucesso', 'Dados carregados da nuvem com sucesso!')
+  setCarregandoNuvem(false)
+}
+
   // Carregar automaticamente da nuvem sempre que o usuário logar
   useEffect(() => {
     if (!user) return
@@ -812,11 +825,28 @@ function App() {
                 </Button>
               </div>
 
-              {mensagemNuvem && (
-                <p className="text-[11px] text-gray-500">
-                  {mensagemNuvem}
-                </p>
-              )}
+              {nuvemMensagem && (
+  <div
+    className={`
+      mt-1 flex items-center gap-2 text-[11px] px-2 py-1 rounded
+      ${
+        nuvemMensagem.tipo === 'sucesso'
+          ? 'bg-green-50 text-green-700 border border-green-200'
+          : nuvemMensagem.tipo === 'erro'
+          ? 'bg-red-50 text-red-700 border border-red-200'
+          : 'bg-gray-50 text-gray-700 border border-gray-200'
+      }
+    `}
+  >
+    {nuvemMensagem.tipo === 'erro' ? (
+      <AlertTriangle className="h-3 w-3" />
+    ) : (
+      <Cloud className="h-3 w-3" />
+    )}
+    <span>{nuvemMensagem.texto}</span>
+  </div>
+)}
+
             </div>
           </div>
         </div>
